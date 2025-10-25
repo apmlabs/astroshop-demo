@@ -93,12 +93,17 @@ kubectl logs -f deployment/frontend
 ## Rules
 - Always update AGENTS.md when discovering new deployment insights
 - **Current status is in AmazonQ.md context** - check existing deployment before creating new infrastructure
+- **ALWAYS check AWS infrastructure first** - use `aws eks list-clusters` and `describe-cluster` before assuming no deployment exists
 - Use AWS CLI to verify resources before creating new ones
 - Document any deployment issues and their solutions
 - Test application accessibility after deployment
 - **Default Infrastructure Behavior**: Check AmazonQ.md first - only create new infrastructure if none exists
 - **Default Region**: Use us-east-2 unless otherwise specified
 - **Status Reporting**: Current deployment status is always available in AmazonQ.md context
+
+## GitHub Repository Management
+- **GitHub Setup**: Follow GITHUB.md in this folder for repository setup instructions
+- **When asked about GitHub repositories**: Reference the GITHUB.md file in this project folder
 
 ## Cleanup Strategy
 
@@ -179,6 +184,8 @@ When cleaning up permanently, follow this order to avoid dependency issues:
 - **Always verify cluster access**: Test kubectl commands after kubeconfig update
 - **Don't ignore resource limits**: Ensure nodes have sufficient CPU/memory
 - **Always check pod status**: Verify all pods are running before declaring success
+- **NEVER commit actual Dynatrace URLs**: Keep dynakube.yaml with [DYNATRACE_TENANT_URL] placeholder for GitHub
+- **Runtime URL substitution**: Get actual URL from comment in local secrets.yaml during deployment only
 
 ## Resource Requirements Summary
 - **Total CPU Requests**: ~1.4 vCPU across all microservices
