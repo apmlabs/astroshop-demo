@@ -280,6 +280,14 @@ aws eks describe-cluster --region us-east-2 --name $CLUSTER_NAME
 
 ## 🧹 Cleanup Your Shopping Infrastructure
 
+### ⚠️ CRITICAL: LoadBalancer Cleanup Warning
+**Kubernetes LoadBalancer services create AWS ELBs that persist after cluster deletion and continue billing!**
+
+**Always delete LoadBalancer services FIRST:**
+```bash
+kubectl delete service frontend-external
+```
+
 ### Option 1: Close Shop Temporarily (Preserve for Later)
 
 For temporary shutdown while keeping all your shopping configuration:

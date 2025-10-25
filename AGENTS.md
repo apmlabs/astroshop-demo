@@ -105,6 +105,17 @@ kubectl logs -f deployment/frontend
 - **GitHub Setup**: Follow GITHUB.md in this folder for repository setup instructions
 - **When asked about GitHub repositories**: Reference the GITHUB.md file in this project folder
 
+## Critical LoadBalancer Cleanup Issue
+**IMPORTANT**: Kubernetes LoadBalancer services create AWS ELBs that persist after cluster deletion, causing ongoing charges!
+
+### Proper Cleanup Order (Prevents Billing Issues)
+1. **Delete LoadBalancer services FIRST**: `kubectl delete service frontend-external`
+2. **Then delete microservices**: `kubectl delete -f [manifests]`
+3. **Then delete Dynatrace**: `kubectl delete -f [dynatrace-operator]`
+4. **Finally delete infrastructure**: node group → cluster → IAM roles
+
+**Why This Matters**: The `frontend-external` service creates an AWS ELB that continues billing even after cluster deletion if not explicitly removed first.
+
 ## Cleanup Strategy
 
 ### Option 1: Scale Down Cluster (Preserve Infrastructure)
@@ -172,6 +183,13 @@ When cleaning up permanently, follow this order to avoid dependency issues:
 - Verify no running clusters: `aws eks list-clusters --region us-east-2`
 - Verify no node groups: `aws eks list-nodegroups --region us-east-2 --cluster-name CLUSTER_NAME`
 - Verify IAM roles cleaned: `aws iam list-roles --query "Roles[?contains(RoleName, 'eks')]"`
+
+### Cleanup Verification
+- Verify no running clusters: `aws eks list-clusters --region us-east-2`
+- Verify no node groups: `aws eks list-nodegroups --region us-east-2 --cluster-name CLUSTER_NAME`
+- Verify IAM roles cleaned: `aws iam list-roles --query "Roles[?contains(RoleName, 'eks')]"`
+- **Critical**: Verify no running EC2 instances: `aws ec2 describe-instances --region us-east-2 --filters "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].InstanceId"`
+- **Critical**: Verify no LoadBalancers: `aws elb describe-load-balancers --region us-east-2` and `aws elbv2 describe-load-balancers --region us-east-2`
 
 ## Critical Mistakes to Avoid
 - **Don't assume existing infrastructure**: Always check AWS resources first
