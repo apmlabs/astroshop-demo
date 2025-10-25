@@ -40,6 +40,13 @@ Repository URL: https://github.com/GoogleCloudPlatform/microservices-demo
 - **Installation Order**: MUST be deployed BEFORE microservices containers
 - **Auto-discovery**: OneAgent automatically discovers and monitors all pods
 
+### OneAgent Control Commands (for EC2-based deployments)
+- **Status check**: `sudo systemctl status oneagent`
+- **Version**: `sudo /opt/dynatrace/oneagent/agent/tools/oneagentctl --version`
+- **Server connection**: `sudo /opt/dynatrace/oneagent/agent/tools/oneagentctl --get-server`
+- **Help**: `sudo /opt/dynatrace/oneagent/agent/tools/oneagentctl --help`
+- **Container monitoring**: Look for `oneagenthelper --containerd` processes in status output
+
 ## Cluster Configuration
 - **Default Region**: us-east-2 unless specified
 - **Default Cluster Name**: online-shop-demo-mcp (with versioning if exists)
