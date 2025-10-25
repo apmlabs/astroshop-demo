@@ -8,7 +8,7 @@ metadata:
   annotations:
     feature.dynatrace.com/k8s-app-enabled: "true"
 spec:
-  apiUrl: [DYNATRACE_TENANT_URL]/api
+  apiUrl: https://cyu0810h.sprint.dynatracelabs.com/api
   tokens: online-boutique-demo
   metadataEnrichment:
     enabled: true
