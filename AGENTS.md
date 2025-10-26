@@ -30,16 +30,38 @@ You are an agent that helps deploy and troubleshoot the **ASTRO SHOP** microserv
 - Dynatrace operator and OneAgent for full-stack monitoring
 - **CRITICAL**: Deploy Dynatrace operator BEFORE microservices for complete visibility
 
+## AWS CLI File Access Workflow Fix
+**CRITICAL DISCOVERY**: The MCP AWS CLI tool is restricted to `/run/user/1000/aws-api-mcp/workdir` for security.
+
+### File Access Solutions:
+1. **Use inline JSON instead of file references** (PREFERRED):
+   ```bash
+   # Instead of: --assume-role-policy-document file://trust-policy.json
+   # Use: --assume-role-policy-document '{"Version":"2012-10-17","Statement":[...]}'
+   ```
+
+2. **Copy files to working directory** (if needed):
+   ```bash
+   # Files must be in /run/user/1000/aws-api-mcp/workdir for file:// references
+   ```
+
+### Trust Policy Templates (for inline use):
+- **EKS Cluster Role**: `'{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"eks.amazonaws.com"},"Action":"sts:AssumeRole"}]}'`
+- **Node Group Role**: `'{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'`
+
+**ALWAYS use inline JSON for AWS CLI commands requiring policy documents!**
+
 ## Installation Process (PROVEN WORKING STEPS)
 1. **IAM Roles**: Create EKS cluster role and node group role (check if exists first)
 2. **EKS Cluster**: Create cluster with proper VPC configuration
 3. **Node Group**: Create managed node group with t3a.medium instances
 4. **kubectl Config**: Update kubeconfig for cluster access
 5. **Dynatrace Operator**: Install operator first
-6. **DAPR Operator**: Install DAPR runtime (dapr init -k --wait)
-7. **Astro Shop Deployment**: Use standard OpenTelemetry Helm chart
-8. **LoadBalancer**: Create external access
-9. **Verification**: Test all URLs work (200 OK)
+6. **Dynatrace Configuration**: Apply secrets-astroshop.yaml and dynakube-astroshop.yaml
+7. **DAPR Operator**: Install DAPR runtime (dapr init -k --wait)
+8. **Astro Shop Deployment**: Use standard OpenTelemetry Helm chart
+9. **LoadBalancer**: Create external access
+10. **Verification**: Test all URLs work (200 OK)
 
 ## EXACT WORKING COMMANDS (COPY-PASTE READY)
 ```bash
@@ -52,19 +74,29 @@ kubectl create namespace dynatrace
 kubectl apply -f https://github.com/Dynatrace/dynatrace-operator/releases/latest/download/kubernetes.yaml
 kubectl -n dynatrace wait --for=condition=ready pod --selector=app.kubernetes.io/name=dynatrace-operator --timeout=300s
 
-# 3. Install DAPR
+# 3. Apply Dynatrace configuration (CRITICAL - don't forget this step!)
+kubectl apply -f secrets-astroshop.yaml
+kubectl apply -f dynakube-astroshop.yaml
+
+# 3a. Restart all pods for Dynatrace monitoring to kick in
+kubectl rollout restart deployment -n astroshop
+kubectl rollout restart statefulset -n astroshop
+
+# 4. Install DAPR
 dapr init -k --wait
 
-# 4. Deploy Astro Shop (THE MAGIC COMMAND!)
+# 5. Deploy Astro Shop (THE MAGIC COMMAND!)
 helm install my-otel-demo open-telemetry/opentelemetry-demo --namespace astroshop --create-namespace
 
-# 5. Create LoadBalancer for external access
+# 6. Create LoadBalancer for external access (CRITICAL - may need manual service creation!)
 kubectl patch service frontend-proxy -n astroshop -p '{"spec": {"type": "LoadBalancer"}}'
+# If frontend-proxy service doesn't exist, create it manually:
+# kubectl expose deployment frontend-proxy -n astroshop --type=LoadBalancer --port=8080
 
-# 6. Get external URL
+# 7. Get external URL
 kubectl get service frontend-proxy -n astroshop
 
-# 7. Test URLs (should all return 200)
+# 8. Test URLs (should all return 200)
 FRONTEND_URL="http://EXTERNAL_IP:8080"
 curl -s -o /dev/null -w "%{http_code}" $FRONTEND_URL
 curl -s -o /dev/null -w "%{http_code}" $FRONTEND_URL/jaeger/ui/
@@ -137,12 +169,14 @@ kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/microserv
 - **Cost**: Each LoadBalancer creates separate AWS ELB charges
 
 ## Common Issues & Solutions
+- **CRITICAL: Missing Node Group**: If cluster exists but pods stuck in Pending/Init for >10 minutes, check `aws eks list-nodegroups`. Node group may be missing and needs creation.
 - **ActiveGate pending**: Remove debugging capability from DynaKube (requires PVCs)
 - **Nodes not ready**: Wait 3-5 minutes for node group initialization
 - **Pods stuck in Init**: Wait for Dynatrace OneAgent to initialize on nodes
 - **Memory issues**: Ensure t3a.medium nodes have sufficient resources
 - **Network access**: Verify security groups allow required traffic
 - **kubectl access**: Ensure kubeconfig is properly configured
+- **Missing frontend-proxy service**: Create LoadBalancer service manually if not auto-created
 
 ## Useful Commands
 ```bash
@@ -168,6 +202,7 @@ kubectl logs -f deployment/frontend
 ## Rules
 - Always update AGENTS.md when discovering new deployment insights
 - **CRITICAL: When user says "remember" - IMMEDIATELY update AGENTS.md with that information**
+- **ALWAYS SHOW ALL ENDPOINTS**: When providing Astro Shop access URLs, always include ALL frontend interfaces (main shop, Grafana, Jaeger, Load Generator, Feature Flags) - never show just one URL
 - **Current status is in AmazonQ.md context** - check existing deployment before creating new infrastructure
 - **ALWAYS check AWS infrastructure first** - use `aws eks list-clusters` and `describe-cluster` before assuming no deployment exists
 - Use AWS CLI to verify resources before creating new ones
@@ -177,6 +212,29 @@ kubectl logs -f deployment/frontend
 - **Default Region**: Use us-east-2 unless otherwise specified
 - **Status Reporting**: Current deployment status is always available in AmazonQ.md context
 - **CRITICAL: ALWAYS UPDATE STATUS FILES** - After ANY infrastructure change (start/stop/terminate/create), immediately update the online-shop-demo status documentation (AmazonQ.md) to reflect current state. Failure to update status files causes context loss and repeated mistakes across chat sessions.
+
+## Critical Naming Convention Error & Fix
+**DISCOVERED ERROR**: Used "online-boutique-demo" naming in Dynatrace configurations instead of "astroshop-demo"
+
+### The Mistake
+- Created Dynatrace secret with name: `online-boutique-demo` 
+- Created DynaKube with name: `online-boutique-demo`
+- This violates the core rule: **ASTRO SHOP = OpenTelemetry Demo**, NOT Google Online Boutique
+
+### The Fix
+- **ALWAYS use "astroshop-demo" naming** for all Dynatrace configurations
+- Correct files: `secrets-astroshop.yaml` and `dynakube-astroshop.yaml`
+- **NEVER reference "online-boutique" or "online-shop"** in Astro Shop deployments
+- Clean up any files with incorrect naming conventions
+
+### Correct Dynatrace Deployment Commands
+```bash
+kubectl apply -f secrets-astroshop.yaml
+kubectl apply -f dynakube-astroshop.yaml
+kubectl get dynakube astroshop-demo -n dynatrace
+```
+
+**REMEMBER**: Astro Shop demo should NEVER reference Google's microservices demo naming!
 
 ## GitHub Repository Management
 - **GitHub Setup**: Follow GITHUB.md in this folder for repository setup instructions
@@ -357,6 +415,43 @@ When cleaning up permanently, follow this order to avoid dependency issues:
 - Verify IAM roles cleaned: `aws iam list-roles --query "Roles[?contains(RoleName, 'eks')]"`
 - **Critical**: Verify no running EC2 instances: `aws ec2 describe-instances --region us-east-2 --filters "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].InstanceId"`
 - **Critical**: Verify no LoadBalancers: `aws elb describe-load-balancers --region us-east-2` and `aws elbv2 describe-load-balancers --region us-east-2`
+
+## Critical Deployment Troubleshooting
+
+### Missing Node Group Issue (CRITICAL)
+**Symptoms**: Cluster exists but all pods stuck in Pending/Init states for >10 minutes
+**Root Cause**: EKS cluster created without node group
+**Diagnosis**: 
+```bash
+aws eks list-nodegroups --region us-east-2 --cluster-name CLUSTER_NAME
+# Returns empty list: {"nodegroups": []}
+```
+**Solution**: Create missing node group
+```bash
+aws eks create-nodegroup --region us-east-2 --cluster-name CLUSTER_NAME --nodegroup-name CLUSTER_NAME-nodes --node-role arn:aws:iam::ACCOUNT:role/eks-nodegroup-role --subnets SUBNET_IDS --instance-types t3a.medium --scaling-config minSize=3,maxSize=6,desiredSize=3 --disk-size 20 --ami-type AL2023_x86_64_STANDARD --capacity-type ON_DEMAND
+```
+
+### Missing Frontend-Proxy Service Issue
+**Symptoms**: Frontend-proxy pod running but no external access
+**Root Cause**: OpenTelemetry Helm chart doesn't create frontend-proxy service
+**Solution**: Create service manually
+```bash
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-proxy
+  namespace: astroshop
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: frontend-proxy
+EOF
+```
 
 ## Critical Mistakes to Avoid
 - **Don't assume existing infrastructure**: Always check AWS resources first

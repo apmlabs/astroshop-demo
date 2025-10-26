@@ -1,26 +1,15 @@
-apiVersion: v1
-data:
-  apiToken: [BASE64_ENCODED_API_TOKEN]
-  dataIngestToken: [BASE64_ENCODED_DATA_INGEST_TOKEN]
-kind: Secret
-metadata:
-  name: online-boutique-demo
-  namespace: dynatrace
-  labels:
-    dynatrace.com/created-by: "dynatrace.kubernetes"
-type: Opaque
----
 apiVersion: dynatrace.com/v1beta5
 kind: DynaKube
 metadata:
-  name: online-boutique-demo
+  name: astroshop-demo
   namespace: dynatrace
   labels:
     dynatrace.com/created-by: "dynatrace.kubernetes"
   annotations:
     feature.dynatrace.com/k8s-app-enabled: "true"
 spec:
-  apiUrl: [DYNATRACE_TENANT_URL]/api
+  apiUrl: https://cyu0810h.sprint.dynatracelabs.com/api
+  tokens: astroshop-demo
   metadataEnrichment:
     enabled: true
   oneAgent:
