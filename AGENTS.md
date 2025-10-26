@@ -18,11 +18,19 @@ You are an agent that helps deploy and troubleshoot the **ASTRO SHOP** microserv
 - **Don't overcomplicate**: GitOps repo adds complexity - use standard Helm chart
 
 ## EKS Cluster Requirements
-- **Minimum**: 3 x t3a.medium nodes (2 vCPU, 4GB RAM each)
+- **CRITICAL: DO NOT USE t3a.medium** - causes severe resource pressure and CPU throttling
+- **REQUIRED**: 3 x m5.large nodes (2 vCPU, 8GB RAM each) - dedicated CPU, no throttling
+- **Why m5.large**: Astro Shop needs 8GB RAM per node, t3a.medium only has 4GB causing 99% memory usage
 - **Kubernetes Version**: 1.31 or earlier for AL2_x86_64, or 1.33+ with AL2023_x86_64_STANDARD
 - **Storage**: 20GB per node
 - **Networking**: Public/private subnets with internet gateway access
 - **IAM**: EKS cluster role and node group role with proper policies
+
+### Instance Type Lessons Learned
+- **t3a.medium (4GB RAM)**: Causes 99% memory usage, CPU throttling from burst credits
+- **m5.large (8GB RAM)**: Dedicated CPU, 25% memory usage, stable performance
+- **Cost difference**: +$126/month but eliminates performance issues
+- **Alternative**: c5.large or m5a.large also work but m5.large provides best memory headroom
 
 ## Deployment Strategy
 - Local system is CONTROL CENTER only - deploy to remote EKS cluster
@@ -121,8 +129,8 @@ curl -s -o /dev/null -w "%{http_code}" $FRONTEND_URL/feature/
 
 ## Cluster Configuration
 - **Default Region**: us-east-2 unless specified
-- **Default Cluster Name**: online-shop-demo-mcp (with versioning if exists)
-- **Node Configuration**: 3 nodes, t3a.medium, ON_DEMAND capacity
+- **Default Cluster Name**: astroshop-demo (with versioning if exists)
+- **Node Configuration**: 3 nodes, m5.large, ON_DEMAND capacity
 - **Scaling**: minSize=3, maxSize=6, desiredSize=3
 - **AMI Type**: AL2023_x86_64_STANDARD for Kubernetes 1.33+
 
@@ -170,10 +178,14 @@ kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/microserv
 
 ## Common Issues & Solutions
 - **CRITICAL: Missing Node Group**: If cluster exists but pods stuck in Pending/Init for >10 minutes, check `aws eks list-nodegroups`. Node group may be missing and needs creation.
+- **CRITICAL: Dynatrace Memory Overhead**: Dynatrace agent injection adds 50-100MB memory overhead per pod. If pods show OOMKilled, increase memory limits:
+  - **accounting service**: Needs 512Mi (not default 120Mi)
+  - **payment service**: Needs 256Mi (not default 120Mi)
+  - **Fix command**: `kubectl patch deployment SERVICE_NAME -n astroshop -p '{"spec":{"template":{"spec":{"containers":[{"name":"SERVICE_NAME","resources":{"limits":{"memory":"512Mi"},"requests":{"memory":"512Mi"}}}]}}}}'`
 - **ActiveGate pending**: Remove debugging capability from DynaKube (requires PVCs)
 - **Nodes not ready**: Wait 3-5 minutes for node group initialization
 - **Pods stuck in Init**: Wait for Dynatrace OneAgent to initialize on nodes
-- **Memory issues**: Ensure t3a.medium nodes have sufficient resources
+- **Memory issues**: Ensure m5.large nodes have sufficient resources (not t3a.medium)
 - **Network access**: Verify security groups allow required traffic
 - **kubectl access**: Ensure kubeconfig is properly configured
 - **Missing frontend-proxy service**: Create LoadBalancer service manually if not auto-created
@@ -214,27 +226,46 @@ kubectl logs -f deployment/frontend
 - **CRITICAL: ALWAYS UPDATE STATUS FILES** - After ANY infrastructure change (start/stop/terminate/create), immediately update the online-shop-demo status documentation (AmazonQ.md) to reflect current state. Failure to update status files causes context loss and repeated mistakes across chat sessions.
 
 ## Critical Naming Convention Error & Fix
-**DISCOVERED ERROR**: Used "online-boutique-demo" naming in Dynatrace configurations instead of "astroshop-demo"
+**DISCOVERED ERROR**: Used "online-shop-demo-mcp" cluster naming instead of "astroshop-demo"
 
 ### The Mistake
+- Created EKS cluster with name: `online-shop-demo-mcp` 
+- Created node group with name: `online-shop-demo-mcp-nodes`
 - Created Dynatrace secret with name: `online-boutique-demo` 
 - Created DynaKube with name: `online-boutique-demo`
 - This violates the core rule: **ASTRO SHOP = OpenTelemetry Demo**, NOT Google Online Boutique
 
-### The Fix
-- **ALWAYS use "astroshop-demo" naming** for all Dynatrace configurations
-- Correct files: `secrets-astroshop.yaml` and `dynakube-astroshop.yaml`
-- **NEVER reference "online-boutique" or "online-shop"** in Astro Shop deployments
-- Clean up any files with incorrect naming conventions
+### The Fix (COMPLETE CLUSTER RECREATION REQUIRED)
+- **ALWAYS use "astroshop-demo" naming** for ALL infrastructure components
+- **EKS Cluster**: `astroshop-demo` (not online-shop-demo-mcp)
+- **Node Group**: `astroshop-demo-nodes` 
+- **Dynatrace Files**: `secrets-astroshop.yaml` and `dynakube-astroshop.yaml`
+- **DynaKube Name**: `astroshop-demo`
+- **Namespace**: `astroshop` (consistent throughout)
+- **NEVER reference "online-boutique", "online-shop", or "online-shop-demo-mcp"** in Astro Shop deployments
 
-### Correct Dynatrace Deployment Commands
+### Correct Infrastructure Naming Pattern
 ```bash
+# EKS Infrastructure
+aws eks create-cluster --name astroshop-demo
+aws eks create-nodegroup --cluster-name astroshop-demo --nodegroup-name astroshop-demo-nodes
+
+# Dynatrace Configuration  
 kubectl apply -f secrets-astroshop.yaml
 kubectl apply -f dynakube-astroshop.yaml
 kubectl get dynakube astroshop-demo -n dynatrace
+
+# Application Deployment
+helm install my-otel-demo open-telemetry/opentelemetry-demo --namespace astroshop --create-namespace
 ```
 
-**REMEMBER**: Astro Shop demo should NEVER reference Google's microservices demo naming!
+### Lesson Learned: Naming Consistency is Critical
+- **Documentation conflicts cause deployment errors**: AGENTS.md had conflicting naming (line 124 vs line 225)
+- **Complete recreation required**: Cannot rename EKS clusters - must delete and recreate
+- **Verification essential**: Always verify cluster names match documentation before proceeding
+- **Status file updates**: Update AmazonQ.md immediately after any naming corrections
+
+**REMEMBER**: Astro Shop demo should NEVER reference Google's microservices demo naming! Use "astroshop-demo" consistently across ALL components.
 
 ## GitHub Repository Management
 - **GitHub Setup**: Follow GITHUB.md in this folder for repository setup instructions
@@ -462,7 +493,8 @@ EOF
 - **Don't forget Dynatrace first**: Install operator before microservices
 - **Don't use debugging capability**: Requires PVCs that may not be available
 - **Always verify cluster access**: Test kubectl commands after kubeconfig update
-- **Don't ignore resource limits**: Ensure nodes have sufficient CPU/memory
+- **CRITICAL: Don't use t3a.medium**: Causes 99% memory usage and CPU throttling - use m5.large
+- **CRITICAL: Account for Dynatrace overhead**: Default 120Mi memory limits cause OOMKilled - patch to 256Mi+ for services with agent injection
 - **Always check pod status**: Verify all pods are running before declaring success
 - **NEVER commit actual Dynatrace URLs**: Keep dynakube.yaml with [DYNATRACE_TENANT_URL] placeholder for GitHub
 - **Runtime URL substitution**: Get actual URL from comment in local secrets.yaml during deployment only

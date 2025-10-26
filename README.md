@@ -1,322 +1,225 @@
-# 🛒 Online Shop Demo on AWS EKS: Your Cloud-Native E-Commerce Platform
+# 🚀 Astro Shop Demo on AWS EKS
 
-Welcome to the future of e-commerce! Deploy a complete microservices-based online shop and experience the power of distributed monitoring across 11 interconnected services. 🚀
+A complete microservices-based e-commerce platform showcasing cloud-native architecture, observability, and modern deployment practices on Amazon EKS.
 
-> **🎯 Current Status**: Check [AmazonQ.md](./AmazonQ.md) for live deployment info!
+> **📊 Current Status**: Check [AmazonQ.md](./AmazonQ.md) for live deployment information
 
-## 🎭 Meet Online Shop Demo: The Microservices E-Commerce Showcase
+## What is Astro Shop?
 
-Imagine a bustling online marketplace with multiple specialized departments working seamlessly together. That's the Online Shop Demo! This isn't just another demo app - it's a **complete e-commerce ecosystem** that showcases:
+Astro Shop is the **OpenTelemetry Demo Application** - a fully-featured e-commerce platform built with 25+ microservices. It demonstrates:
 
-- 🏗️ **Cloud-native microservices architecture** with 11 specialized services
-- 🔄 **Real-world e-commerce workflows** - browse, cart, checkout, payment
-- 💥 **Kubernetes-native deployment** on AWS EKS with auto-scaling
-- 🌐 **Modern web interface** with responsive design
-- 🤖 **Built-in load generation** - realistic customer behavior simulation
-- 📊 **Full observability** with Dynatrace monitoring
+- **Cloud-native microservices architecture** with realistic service interactions
+- **Complete e-commerce workflows** - product browsing, cart management, checkout, and payment processing
+- **Full observability stack** with OpenTelemetry, Jaeger, Grafana, and Prometheus
+- **Production-ready deployment** on AWS EKS with Dynatrace monitoring
+- **Built-in load generation** for realistic traffic simulation
 
-## 🎒 What You'll Need for This Journey
+## Prerequisites
 
-- 🔑 AWS account with EKS superpowers
-- 🧠 Basic knowledge of Kubernetes and AWS EKS
-- 🐳 Understanding of containerized microservices architectures
+- AWS account with EKS permissions
+- Basic knowledge of Kubernetes and AWS
+- `kubectl`, `helm`, and AWS CLI installed
 
-## 💪 EKS Cluster Power Requirements
+## Infrastructure Requirements
 
-Your e-commerce empire needs solid Kubernetes infrastructure! Here's what works:
+**Recommended Configuration:**
+- **Nodes**: 3 x m5.large instances (2 vCPU, 8GB RAM each)
+- **Kubernetes**: Version 1.31+ 
+- **Storage**: 20GB per node
+- **Region**: us-east-2 (configurable)
 
-- **🏆 Proven Champion**: 3 x t3a.medium nodes (2 vCPU, 4GB RAM each) - handles the shopping load perfectly!
-- **⚡ Kubernetes Version**: 1.31 or earlier (AL2_x86_64) or 1.33+ (AL2023_x86_64_STANDARD)
-- **💾 Storage**: 20GB per node
-- **🌐 Networking**: Default VPC with public/private subnets
+> **💡 Why m5.large?** Dedicated CPU and sufficient memory (8GB) prevent resource pressure issues that occur with smaller burstable instances.
 
-> **💡 Pro Tip**: t3a.medium nodes provide the perfect balance of cost and performance for this microservices platform!
+## Architecture Overview
 
-## 🏗️ Your E-Commerce Architecture (The Shopping Empire)
+| Component | Purpose | Resources |
+|-----------|---------|-----------|
+| Frontend | Web UI and customer interface | 100m CPU, 64Mi RAM |
+| Cart Service | Shopping cart management | 200m CPU, 64Mi RAM |
+| Product Catalog | Product information and search | 100m CPU, 64Mi RAM |
+| Checkout | Order processing | 100m CPU, 64Mi RAM |
+| Payment | Payment processing | 100m CPU, 256Mi RAM* |
+| Accounting | Financial tracking | 100m CPU, 512Mi RAM* |
+| Shipping | Delivery management | 100m CPU, 64Mi RAM |
+| Recommendation | AI-powered suggestions | 200m CPU, 220Mi RAM |
+| Load Generator | Synthetic traffic | 500m CPU, 256Mi RAM |
 
-| Service | Description | Role | Resources |
-|---------|-------------|------|-----------|
-| Frontend | Web UI & customer interface | 🏪 Storefront | 100m CPU, 64Mi RAM |
-| Cart Service | Shopping cart management | 🛒 Cart | 200m CPU, 64Mi RAM |
-| Product Catalog | Product information & search | 📦 Catalog | 100m CPU, 64Mi RAM |
-| Checkout Service | Order processing engine | 💳 Checkout | 100m CPU, 64Mi RAM |
-| Payment Service | Payment processing | 💰 Payments | 100m CPU, 64Mi RAM |
-| Shipping Service | Delivery management | 🚚 Shipping | 100m CPU, 64Mi RAM |
-| Email Service | Customer notifications | 📧 Notifications | 100m CPU, 64Mi RAM |
-| Currency Service | Multi-currency support | 💱 Currency | 100m CPU, 64Mi RAM |
-| Recommendation | AI-powered suggestions | 🎯 AI Engine | 200m CPU, 220Mi RAM |
-| Ad Service | Advertisement platform | 📢 Marketing | 200m CPU, 180Mi RAM |
-| Redis | Session & cart storage | 🗄️ Cache | 70m CPU, 200Mi RAM |
-| Load Generator | Synthetic customers | 🤖 Traffic | 500m CPU, 256Mi RAM |
+*Higher memory allocation required for Dynatrace agent injection
 
-**Total Resources**: ~1.4 vCPU requests, ~1.2GB memory requests
+## Quick Start
 
-## 🚀 Let's Get This E-Commerce Platform Running!
+### 1. Create EKS Cluster
 
-### 1. 🏗️ Create EKS Service Role
 ```bash
-# Check if role exists first
-if ! aws iam get-role --region us-east-2 --role-name eks-cluster-role 2>/dev/null; then
-  # Create trust policy
-  cat > eks-service-role-trust-policy.json << EOF
-{
+# Set up IAM roles
+aws iam create-role --role-name eks-cluster-role --assume-role-policy-document '{
   "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "eks.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {"Service": "eks.amazonaws.com"},
+    "Action": "sts:AssumeRole"
+  }]
+}'
 
-  # Create role
-  aws iam create-role --region us-east-2 --role-name eks-cluster-role --assume-role-policy-document file://eks-service-role-trust-policy.json
-fi
-
-# Attach policy (idempotent)
-aws iam attach-role-policy --region us-east-2 --role-name eks-cluster-role --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
-```
-
-### 2. 🎯 Create Your EKS Shopping Cluster
-```bash
-# Get VPC and subnets
-VPC_ID=$(aws ec2 describe-vpcs --region us-east-2 --filters "Name=is-default,Values=true" --query "Vpcs[0].VpcId" --output text)
-SUBNETS=$(aws ec2 describe-subnets --region us-east-2 --filters "Name=vpc-id,Values=$VPC_ID" --query "Subnets[*].SubnetId" --output text | tr '\t' ' ')
-
-# Determine unique cluster name
-CLUSTER_NAME="online-shop-demo-mcp"
-VERSION=1
-while aws eks describe-cluster --region us-east-2 --name $CLUSTER_NAME 2>/dev/null; do
-  VERSION=$((VERSION + 1))
-  CLUSTER_NAME="online-shop-demo-mcp-v$VERSION"
-done
-echo "Using cluster name: $CLUSTER_NAME"
+aws iam attach-role-policy --role-name eks-cluster-role \
+  --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
 
 # Create cluster
-aws eks create-cluster --region us-east-2 --name $CLUSTER_NAME --version 1.31 --role-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/eks-cluster-role --resources-vpc-config subnetIds=$SUBNETS,endpointPrivateAccess=true,endpointPublicAccess=true
+CLUSTER_NAME="astroshop-demo"
+aws eks create-cluster --region us-east-2 --name $CLUSTER_NAME \
+  --version 1.31 \
+  --role-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/eks-cluster-role \
+  --resources-vpc-config subnetIds=$(aws ec2 describe-subnets --region us-east-2 --filters "Name=vpc-id,Values=$(aws ec2 describe-vpcs --region us-east-2 --filters "Name=is-default,Values=true" --query "Vpcs[0].VpcId" --output text)" --query "Subnets[*].SubnetId" --output text | tr '\t' ',')
 
-# Wait for cluster to be active
+# Wait for cluster
 aws eks wait cluster-active --region us-east-2 --name $CLUSTER_NAME
 ```
 
-### 3. 🔧 Create Node Group Role
+### 2. Create Node Group
+
 ```bash
-# Check if nodegroup role exists first
-if ! aws iam get-role --region us-east-2 --role-name eks-nodegroup-role 2>/dev/null; then
-  # Create nodegroup trust policy
-  cat > nodegroup-role-trust-policy.json << EOF
-{
+# Create node group role
+aws iam create-role --role-name eks-nodegroup-role --assume-role-policy-document '{
   "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {"Service": "ec2.amazonaws.com"},
+    "Action": "sts:AssumeRole"
+  }]
+}'
 
-  # Create role
-  aws iam create-role --region us-east-2 --role-name eks-nodegroup-role --assume-role-policy-document file://nodegroup-role-trust-policy.json
-fi
+# Attach required policies
+aws iam attach-role-policy --role-name eks-nodegroup-role --policy-arn arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+aws iam attach-role-policy --role-name eks-nodegroup-role --policy-arn arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+aws iam attach-role-policy --role-name eks-nodegroup-role --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
 
-# Attach policies (idempotent)
-aws iam attach-role-policy --region us-east-2 --role-name eks-nodegroup-role --policy-arn arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
-aws iam attach-role-policy --region us-east-2 --role-name eks-nodegroup-role --policy-arn arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
-aws iam attach-role-policy --region us-east-2 --role-name eks-nodegroup-role --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
-```
+# Create node group
+aws eks create-nodegroup --region us-east-2 --cluster-name $CLUSTER_NAME \
+  --nodegroup-name $CLUSTER_NAME-nodes \
+  --node-role arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/eks-nodegroup-role \
+  --subnets $(aws ec2 describe-subnets --region us-east-2 --filters "Name=vpc-id,Values=$(aws ec2 describe-vpcs --region us-east-2 --filters "Name=is-default,Values=true" --query "Vpcs[0].VpcId" --output text)" --query "Subnets[*].SubnetId" --output text | tr '\t' ' ') \
+  --instance-types m5.large \
+  --scaling-config minSize=3,maxSize=6,desiredSize=3 \
+  --disk-size 20 \
+  --ami-type AL2023_x86_64_STANDARD
 
-### 4. 🚀 Launch Your Shopping Node Group
-```bash
-# Create nodegroup (cluster must be ACTIVE first)
-aws eks create-nodegroup --region us-east-2 --cluster-name $CLUSTER_NAME --nodegroup-name $CLUSTER_NAME-nodes --node-role arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/eks-nodegroup-role --subnets $SUBNETS --instance-types t3a.medium --scaling-config minSize=3,maxSize=6,desiredSize=3 --disk-size 20 --ami-type AL2023_x86_64_STANDARD --capacity-type ON_DEMAND
-
-# Wait for nodegroup to be active
-aws eks wait nodegroup-active --region us-east-2 --cluster-name $CLUSTER_NAME --nodegroup-name $CLUSTER_NAME-nodes
-```
-
-### 5. 🔌 Connect kubectl to Your Shopping Empire
-```bash
+# Configure kubectl
 aws eks update-kubeconfig --region us-east-2 --name $CLUSTER_NAME
 ```
 
-### 6. 👁️ Install Dynatrace Operator (The All-Seeing Shopping Monitor)
-
-**🚨 Critical**: Install Dynatrace operator BEFORE deploying microservices for complete visibility!
+### 3. Install Dynatrace Operator (Optional)
 
 ```bash
 kubectl create namespace dynatrace
 kubectl apply -f https://github.com/Dynatrace/dynatrace-operator/releases/latest/download/kubernetes.yaml
-kubectl -n dynatrace wait --for=condition=ready pod --selector=app.kubernetes.io/name=dynatrace-operator --timeout=300s
+
+# Apply your Dynatrace configuration
+kubectl apply -f secrets-astroshop.yaml
+kubectl apply -f dynakube-astroshop.yaml
 ```
 
-### 7. 🔧 Configure Dynatrace Monitoring
-```bash
-# Apply secrets first (contains your Dynatrace credentials)
-kubectl apply -f secrets.yaml
+### 4. Deploy Astro Shop
 
-# Then apply DynaKube configuration
-kubectl apply -f dynakube.yaml
+```bash
+# Add OpenTelemetry Helm repository
+helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+helm repo update
+
+# Install DAPR (required dependency)
+dapr init -k --wait
+
+# Deploy Astro Shop
+helm install my-otel-demo open-telemetry/opentelemetry-demo \
+  --namespace astroshop --create-namespace
+
+# Create external access
+kubectl patch service frontend-proxy -n astroshop \
+  -p '{"spec": {"type": "LoadBalancer"}}'
 ```
 
-### 8. 🛒 Deploy Your Online Shop Empire!
+### 5. Access Your Application
+
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/microservices-demo/main/release/kubernetes-manifests.yaml
+# Get the external URL
+kubectl get service frontend-proxy -n astroshop
+
+# Access points:
+# Main Shop: http://EXTERNAL-IP:8080
+# Grafana: http://EXTERNAL-IP:8080/grafana/
+# Jaeger: http://EXTERNAL-IP:8080/jaeger/ui/
+# Load Generator: http://EXTERNAL-IP:8080/loadgen/
+# Feature Flags: http://EXTERNAL-IP:8080/feature/
 ```
 
-### 9. ✅ Verify Your Shopping Platform is Live
+## Management
+
+### Monitor Application
 ```bash
-kubectl get pods --all-namespaces
-kubectl get services
+kubectl get pods -n astroshop
+kubectl logs -f deployment/frontend -n astroshop
 ```
 
-All pods should show "Running" status. Your e-commerce platform is ready for customers! 🎉
-
-## 🎉 Access Your Shopping Empire
-
-Once deployed, explore your e-commerce platform:
-
+### Scale Services
 ```bash
-# Get the frontend service URL
-kubectl get service frontend-external
+kubectl scale deployment frontend --replicas=3 -n astroshop
 ```
 
-- **🌟 Online Shop**: `http://EXTERNAL_IP:80` (from frontend-external service)
-- **🔧 All Services**: Check with `kubectl get services`
-
-## 💥 Built-in E-Commerce Scenarios
-
-Your shopping platform includes realistic scenarios for demonstration:
-
-- 🛒 **Product Browsing**: Customers exploring your catalog
-- 💳 **Shopping Cart**: Adding and removing items
-- 🔍 **Product Search**: Finding specific products
-- 💰 **Checkout Process**: Complete purchase workflows
-- 📧 **Email Notifications**: Order confirmations
-- 🚚 **Shipping Tracking**: Delivery management
-- 🎯 **Recommendations**: AI-powered product suggestions
-- 📢 **Advertisements**: Targeted marketing campaigns
-
-## 🛠️ Shopping Platform Management Commands
-
-### Check your shopping services
+### Troubleshooting
 ```bash
-kubectl get pods
-kubectl logs -f deployment/frontend
-```
+# Check pod status
+kubectl describe pod POD_NAME -n astroshop
 
-### Scale your shopping capacity
-```bash
-kubectl scale deployment frontend --replicas=3
-```
+# View service logs
+kubectl logs deployment/SERVICE_NAME -n astroshop
 
-### Update your shopping platform
-```bash
-kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/microservices-demo/main/release/kubernetes-manifests.yaml
-```
-
-### Monitor shopping traffic
-```bash
-kubectl top pods
+# Check resource usage
 kubectl top nodes
+kubectl top pods -n astroshop
 ```
 
-## 🔧 Troubleshooting Your Shopping Platform
+## Cost Management
 
-### Check if customers can reach your shop
-```bash
-kubectl get services
-kubectl describe service frontend-external
-```
+**Monthly Costs (us-east-2):**
+- 3 x m5.large nodes: ~$207/month
+- EKS cluster: $73/month
+- LoadBalancer: ~$18/month
+- **Total**: ~$298/month
 
-### Inspect your shopping services
-```bash
-kubectl get pods --all-namespaces
-kubectl describe pod POD_NAME
-```
+**Cost Optimization:**
+- Scale down node group when not in use: `aws eks update-nodegroup-config --scaling-config minSize=0,desiredSize=0`
+- Use Spot instances for development (add `--capacity-type SPOT`)
+- Set up CloudWatch billing alerts
 
-### Read service logs
-```bash
-kubectl logs deployment/frontend
-kubectl logs deployment/cartservice
-```
+## Cleanup
 
-### Check cluster health
-```bash
-kubectl get nodes
-aws eks describe-cluster --region us-east-2 --name $CLUSTER_NAME
-```
-
-## 💰 Cost Optimization for Your Shopping Business
-
-- Use **t3a.medium nodes** for optimal cost/performance balance
-- **Scale down node group** when shop is closed to save costs
-- Consider **Spot instances** for development environments
-- Monitor **CloudWatch costs** for EKS cluster expenses
-- Use **Horizontal Pod Autoscaler** for automatic scaling
-
-## 🔒 Shopping Security Notes
-
-- EKS cluster uses **IAM roles** for secure access
-- **Network policies** can restrict inter-service communication
-- Consider **AWS Load Balancer Controller** for production
-- Monitor **CloudWatch** for cluster security events
-- Set up **cost alerts** to prevent surprise bills
-
-## 🎯 Next Steps for Your Shopping Empire
-
-1. Configure Dynatrace monitoring dashboards
-2. Set up business event capture for purchase analytics
-3. Implement custom metrics for shopping behavior
-4. Configure alerting for service failures
-5. Explore Kubernetes autoscaling features
-
-## 🧹 Cleanup Your Shopping Infrastructure
-
-### ⚠️ CRITICAL: LoadBalancer Cleanup Warning
-**Kubernetes LoadBalancer services create AWS ELBs that persist after cluster deletion and continue billing!**
-
-**Always delete LoadBalancer services FIRST:**
-```bash
-kubectl delete service frontend-external
-```
-
-### Option 1: Close Shop Temporarily (Preserve for Later)
-
-For temporary shutdown while keeping all your shopping configuration:
+**⚠️ Important**: Delete LoadBalancer services first to avoid ongoing ELB charges!
 
 ```bash
-# Scale down to save costs (preserves all configuration)
-aws eks update-nodegroup-config --region us-east-2 --cluster-name $CLUSTER_NAME --nodegroup-name $CLUSTER_NAME-nodes --scaling-config minSize=0,maxSize=6,desiredSize=0
+# Delete application
+kubectl delete service frontend-proxy -n astroshop
+helm uninstall my-otel-demo -n astroshop
 
-# Reopen for business later
-aws eks update-nodegroup-config --region us-east-2 --cluster-name $CLUSTER_NAME --nodegroup-name $CLUSTER_NAME-nodes --scaling-config minSize=3,maxSize=6,desiredSize=3
+# Delete infrastructure
+aws eks delete-nodegroup --region us-east-2 --cluster-name $CLUSTER_NAME --nodegroup-name $CLUSTER_NAME-nodes
+aws eks delete-cluster --region us-east-2 --name $CLUSTER_NAME
+
+# Clean up IAM roles (if not used elsewhere)
+aws iam detach-role-policy --role-name eks-cluster-role --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+aws iam delete-role --role-name eks-cluster-role
+# ... repeat for nodegroup role
 ```
 
-**Benefits**: No redeployment needed, faster reopening, keeps all Kubernetes configuration.
+## Contributing
 
-### Option 2: Permanent Shopping Platform Closure
+This repository demonstrates deployment of the [OpenTelemetry Demo Application](https://github.com/open-telemetry/opentelemetry-demo) on AWS EKS with observability best practices.
 
-When you're done with the shopping demo permanently:
+## License
 
-1. **Delete microservices**: `kubectl delete -f https://raw.githubusercontent.com/GoogleCloudPlatform/microservices-demo/main/release/kubernetes-manifests.yaml`
-2. **Delete Dynatrace**: `kubectl delete -f https://github.com/Dynatrace/dynatrace-operator/releases/latest/download/kubernetes.yaml`
-3. **Delete node group**: `aws eks delete-nodegroup --region us-east-2 --cluster-name $CLUSTER_NAME --nodegroup-name $CLUSTER_NAME-nodes`
-4. **Delete cluster**: `aws eks delete-cluster --region us-east-2 --name $CLUSTER_NAME`
-5. **Clean up IAM roles** (if no other EKS clusters need them)
-
-Always scale down or delete resources to stop shopping expenses immediately! 💸
+This project follows the same license as the OpenTelemetry Demo Application.
 
 ---
 
-**🛒 Repository**: https://github.com/GoogleCloudPlatform/microservices-demo  
-**📚 Architecture**: Cloud-native microservices e-commerce platform  
-**🎯 Use Case**: Complete online shopping application for Kubernetes demonstrations  
-**📊 Context**: See [AmazonQ.md](./AmazonQ.md) for current deployment status
+**🔗 Links:**
+- [OpenTelemetry Demo](https://github.com/open-telemetry/opentelemetry-demo)
+- [AWS EKS Documentation](https://docs.aws.amazon.com/eks/)
+- [Dynatrace Operator](https://github.com/Dynatrace/dynatrace-operator)
