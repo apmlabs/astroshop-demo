@@ -1,5 +1,6 @@
 # Sensitive files
 secrets.yaml
+secrets-astroshop.yaml
 dynakube-secrets.yaml
 *.pem
 *.key
@@ -42,3 +43,6 @@ AmazonQ.md
 # AWS CLI working files
 eks-service-role-trust-policy.json
 nodegroup-role-trust-policy.json
+
+# Embedded git repositories
+opentelemetry-demo-gitops/
