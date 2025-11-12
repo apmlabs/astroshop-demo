@@ -27,6 +27,11 @@ You are an agent that helps deploy and troubleshoot the **ASTRO SHOP** microserv
 - **EKS Cluster**: `'{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"eks.amazonaws.com"},"Action":"sts:AssumeRole"}]}'`
 - **Node Group**: `'{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'`
 
+## IAM Role Names (CRITICAL - Use Astroshop-Specific Names)
+- **Cluster Role**: `astroshop-eks-cluster-role` (NOT generic `eks-cluster-role`)
+- **Node Group Role**: `astroshop-eks-nodegroup-role` (NOT generic `eks-nodegroup-role`)
+- **Why**: Prevents accidental deletion of other demo/project roles
+
 ## Deployment Process
 1. **Check AmazonQ.md status** - Don't create new infrastructure if it exists
 2. **IAM Roles**: Create cluster and node group roles (check existence first)
