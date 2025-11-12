@@ -52,7 +52,7 @@ Astro Shop is the **OpenTelemetry Demo Application** - a fully-featured e-commer
 
 ```bash
 # Set up IAM roles
-aws iam create-role --role-name eks-cluster-role --assume-role-policy-document '{
+aws iam create-role --role-name astroshop-eks-cluster-role --assume-role-policy-document '{
   "Version": "2012-10-17",
   "Statement": [{
     "Effect": "Allow",
@@ -61,14 +61,14 @@ aws iam create-role --role-name eks-cluster-role --assume-role-policy-document '
   }]
 }'
 
-aws iam attach-role-policy --role-name eks-cluster-role \
+aws iam attach-role-policy --role-name astroshop-eks-cluster-role \
   --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
 
 # Create cluster
 CLUSTER_NAME="astroshop-demo"
 aws eks create-cluster --region us-east-2 --name $CLUSTER_NAME \
   --version 1.31 \
-  --role-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/eks-cluster-role \
+  --role-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/astroshop-eks-cluster-role \
   --resources-vpc-config subnetIds=$(aws ec2 describe-subnets --region us-east-2 --filters "Name=vpc-id,Values=$(aws ec2 describe-vpcs --region us-east-2 --filters "Name=is-default,Values=true" --query "Vpcs[0].VpcId" --output text)" --query "Subnets[*].SubnetId" --output text | tr '\t' ',')
 
 # Wait for cluster
@@ -79,7 +79,7 @@ aws eks wait cluster-active --region us-east-2 --name $CLUSTER_NAME
 
 ```bash
 # Create node group role
-aws iam create-role --role-name eks-nodegroup-role --assume-role-policy-document '{
+aws iam create-role --role-name astroshop-eks-nodegroup-role --assume-role-policy-document '{
   "Version": "2012-10-17",
   "Statement": [{
     "Effect": "Allow",
@@ -89,14 +89,14 @@ aws iam create-role --role-name eks-nodegroup-role --assume-role-policy-document
 }'
 
 # Attach required policies
-aws iam attach-role-policy --role-name eks-nodegroup-role --policy-arn arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
-aws iam attach-role-policy --role-name eks-nodegroup-role --policy-arn arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
-aws iam attach-role-policy --role-name eks-nodegroup-role --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+aws iam attach-role-policy --role-name astroshop-eks-nodegroup-role --policy-arn arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+aws iam attach-role-policy --role-name astroshop-eks-nodegroup-role --policy-arn arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+aws iam attach-role-policy --role-name astroshop-eks-nodegroup-role --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
 
 # Create node group
 aws eks create-nodegroup --region us-east-2 --cluster-name $CLUSTER_NAME \
   --nodegroup-name $CLUSTER_NAME-nodes \
-  --node-role arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/eks-nodegroup-role \
+  --node-role arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/astroshop-eks-nodegroup-role \
   --subnets $(aws ec2 describe-subnets --region us-east-2 --filters "Name=vpc-id,Values=$(aws ec2 describe-vpcs --region us-east-2 --filters "Name=is-default,Values=true" --query "Vpcs[0].VpcId" --output text)" --query "Subnets[*].SubnetId" --output text | tr '\t' ' ') \
   --instance-types m5.large \
   --scaling-config minSize=3,maxSize=6,desiredSize=3 \
@@ -204,8 +204,8 @@ aws eks delete-nodegroup --region us-east-2 --cluster-name $CLUSTER_NAME --nodeg
 aws eks delete-cluster --region us-east-2 --name $CLUSTER_NAME
 
 # Clean up IAM roles (if not used elsewhere)
-aws iam detach-role-policy --role-name eks-cluster-role --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
-aws iam delete-role --role-name eks-cluster-role
+aws iam detach-role-policy --role-name astroshop-eks-cluster-role --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+aws iam delete-role --role-name astroshop-eks-cluster-role
 # ... repeat for nodegroup role
 ```
 
