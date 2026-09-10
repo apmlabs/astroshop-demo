@@ -223,3 +223,8 @@ This project follows the same license as the OpenTelemetry Demo Application.
 - [OpenTelemetry Demo](https://github.com/open-telemetry/opentelemetry-demo)
 - [AWS EKS Documentation](https://docs.aws.amazon.com/eks/)
 - [Dynatrace Operator](https://github.com/Dynatrace/dynatrace-operator)
+
+
+## Codex development
+
+Start Codex in this directory. [AGENTS.md](AGENTS.md) defines the project role; [PROGRESS.md](PROGRESS.md) is the current handover and work log; [.codex/knowledge/INDEX.md](.codex/knowledge/INDEX.md) indexes detailed inherited knowledge. Original history and Kiro skills remain preserved.

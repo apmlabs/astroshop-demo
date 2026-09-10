@@ -1,0 +1,31 @@
+# Project-scoped Codex configuration. Credentials are loaded privately by the bridge.
+
+[mcp_servers.aws-mcp]
+command = "python3"
+args = ["/home/ubuntu/codexprojects/.codex/mcp_bridge.py", "aws-mcp"]
+startup_timeout_sec = 120
+tool_timeout_sec = 120
+
+[mcp_servers.aws-knowledge-mcp-server]
+command = "python3"
+args = ["/home/ubuntu/codexprojects/.codex/mcp_bridge.py", "aws-knowledge-mcp-server"]
+startup_timeout_sec = 120
+tool_timeout_sec = 120
+
+[mcp_servers.dynatrace-mcp-server]
+command = "python3"
+args = ["/home/ubuntu/codexprojects/.codex/mcp_bridge.py", "dynatrace-mcp-server"]
+startup_timeout_sec = 120
+tool_timeout_sec = 120
+
+[mcp_servers.github]
+command = "python3"
+args = ["/home/ubuntu/codexprojects/.codex/mcp_bridge.py", "github"]
+startup_timeout_sec = 120
+tool_timeout_sec = 120
+
+[mcp_servers.terraform]
+command = "python3"
+args = ["/home/ubuntu/codexprojects/.codex/mcp_bridge.py", "terraform"]
+startup_timeout_sec = 120
+tool_timeout_sec = 120
